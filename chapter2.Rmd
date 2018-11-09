@@ -1,7 +1,49 @@
-# Insert chapter 2 title here
+##Regression analysis
 
-*Describe the work you have done this week and summarize your learning.*
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using  
+Reading the data into R and exploring it's structure and dimensions:
+``` {r, echo = FALSE}
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+learning2014 <- read.table("learning2014.txt")
+dim(learning2014)
+str(learning2014)
+```
+
+The data has 166 rows (observations) and 7 columns (variables). One of the variables, gender, is a factor with two levels.Others, including age, attitude, deep, stra, surf and points, are numeric.
+
+Visualizing the data and inspecting summeries of the variables:
+``` {r, echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+library(GGally)
+library(ggplot2)
+my_graph <- ggpairs(learning2014, mapping = aes(col = gender, alpha = 0.3), 
+                         lower = list(combo = wrap("facethist", bins = 20)))
+my_graph
+summary(learning2014)
+```
+
+The dataset includes much more women (110) than men (56). Age ranges from 17 to 55, with a 25.51 as the mean age, so the age distribution is strongly skewed on left. Scores on the Points variable range from 7 to 33 with a mean of 22.73. Other variables, including attitude (mean=3.14), deep (mean=3.12), stra (mean=3.12) and surf (mean=2.79) range from 1 to 5. There is a somewhat strong correlation between points and attitude (0.44). There is also a correlation between surf and deep (-0.32), although this correlation seemes strong only for men (-0.62) and pretty much nonexistet for women (-0.09). Men also have a correlation between surf and attitude (-0.37), but this does not appear for women (-0.015).
+
+Fitting a regression line and showing the summary:
+```{r, echo = FALSE}
+the_model <- lm(Points ~ attitude + stra + surf, data = learning2014)
+summary(the_model)
+```
+
+The equation could be written like this: y = 11.02 + 3.34(attitude) + 0.85(stra) -0.59(surf), with y being the predicted value of "Points".Only the variable "attitude" explained changes in "Points" significantly
+(B=3.4, p < 0.001). The B of 3.4 means that higher attitude predicts higher scores on Points. Intercept of 11.01 means that this is the point where the regression line crosses the y-axis. Stra (B=0.85, p = 0.18) and surf (B=-0.59, p=0.47) weren't significant predictors, so they will be removed in the next analysis.
+
+Fitting the better model:
+```{r, echo = FALSE}
+the_better_model <- lm (Points ~ attitude, data = learning2014)
+summary(the_better_model)
+```
+
+Attitude significantly explains Points (B=3.53, p < 0.001). Higher scores on attitude predict higher scores on Points. Multiple R-squared of 0.19 means that this model explains 19% of all the variaton in the dependent variable (points). This is generally considered a low R-squared value, although if you think about it, if "attitude" single-handedly explains 19 % of all the variation in "Points", I would say it's quite a lot!
+
+Producing the diagnostic plots:
+```{r, echo = FALSE}
+plot(the_better_model, which = c(1,2,5))
+```
+
+From the Residuals vs Fitted -plot we can see that size of the residuals does not depend on the explanatory variable, since there is no pattern to be seen in the scatterplot.QQ-plot is produced to evaluate wheter the residuals are normally distributed.It seems that the residuals fit reasonably well within the line, which means that they seem to fit to the normality assumption. From the Residuals vs Leverage plot we can see that no single value stands out with expectionally high leverage. In conclusion, our model seems to fit the standards!
+
