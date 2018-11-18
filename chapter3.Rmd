@@ -1,0 +1,120 @@
+##Logistic regression
+
+Reading the data and printing out the variable names:
+```{r, echo = FALSE}
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+alc <- read.csv("alc.csv", sep = ",", header = TRUE, row.names = 1)
+colnames(alc)
+```
+
+Data combines two student alcohol consumption data sets. It includes 35 variables, which measure grades, alcohol use and different background charasteristics.
+
+I choose variables "failures", "absences", "sex", and "age" to predict higher alcohol use. I believe higher failures and higher absences wil be related to higher alcohol use. I believe that male sex and younger age will also predict higher alchol use.
+
+Now, let's explore the relationships of these variables and high alcohol use numerically and graphically.
+
+```{r, echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+library(tidyr); library(dplyr); library(ggplot2)
+```
+
+Crosstabulation of the relationship between high_use and sex:
+```{r, echo = FALSE}
+table(alc$high_use, alc$sex) %>% prop.table()
+```
+
+Crosstabulation of the relationship between high_use and failures:
+```{r, echo = FALSE}
+table(alc$high_use, alc$failures) %>% prop.table()
+```
+
+Box plot of the relationship between high_use and absences (gender included):
+```{r, echo = FALSE}
+g1 <- ggplot(alc, aes(x = high_use, y = absences, col = sex))
+g1 + geom_boxplot()
+```
+
+Box plot of the relationship between high_use and age (gender included):
+```{r, echo = FALSE}
+g2 <- ggplot(alc, aes(x=high_use, y = age, col = sex))
+g2 + geom_boxplot()
+```
+
+Okay, we can see that male sex, absences and failures are all related to higher alcohol consumption (as predicted). Older age seems to affect differently to men's and women's alchohol use and there doesn't seem to be a straightfoward relationship between age and high use (unlike predicted).
+
+Fitting the logistic regression model and producing its summary, odds ratios and confidence intervals for those odds ratios:
+```{r, echo = FALSE, message = FALSE}
+model1 <- glm(data=alc, high_use ~ failures + absences + age + sex, family = "binomial")
+summary(model1)
+OR <- coef(model1) %>% exp
+CI <- confint(model1) %>% exp
+cbind(OR, CI)
+```
+
+From the summary we can already see that absences and sex are strong predictors
+for the alcohol consumption with high p-values and failures seems to be significant
+predictor as well, although with slightly lower p-value (p=0.036). OR for male sex is
+2.58 , meaning that men are over two times more likely than women to be in the
+"high_use"-group. High value for failures increases the likelihood of higher use of
+alcohol as well (OR = 1.5), as does high value for absences (OR = 1.09). Age however, doesn't seem to predict alcohol use all that well. Results don't support the hypothesis of the relationship between age and high_use, but other hypothesis are supported.
+
+Let's fit an adjusted model without the variable age.
+```{r, echo = FALSE, message = FALSE}
+model2 <- glm(data=alc, high_use ~ failures + absences + sex, family = "binomial")
+summary(model2)
+OR <- coef(model2) %>% exp
+CI <- confint(model2) %>% exp
+cbind(OR, CI)
+```
+
+
+Now, let's calcuate the predicted probabilites for "high_use", add those predicted
+probabilites to the dataset, and use them to make a prediction.
+Here are cross tabulation of the correct predictions and a nice plot of them:
+```{r, echo = FALSE, warning = FALSE}
+probabilities <- predict(model2, type = "response")
+alc <- mutate(alc, probability = probabilities)
+alc <- mutate(alc, prediction = probability > 0.5)
+table(high_use = alc$high_use, prediction = alc$prediction)
+g <- ggplot(alc, aes(x = probability, y = high_use, col = prediction))
+g + geom_point()
+```
+
+Defining a loss function to compute the average number of wrong predictions:
+```{r, echo = FALSE }
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+loss_func(class = alc$high_use, alc$probability)
+```
+
+From all of the 382 subjects, 268 were truly not high users of alcohol, an our model correclty identified 259 of them (97%) as non-high-users. Seems pretty good. However, 114 of these subjects were truly high users of alcohol, and our model identified only 30 one of them (26%). Not so great! We can calculate the average number of wrongly classified cases by hand from the 2x2-table ((9+84)/382 = 0.24), and we can see that that is the same number that the loss function produces. So 24% of the predictions went wrong, and most of those were false negatives. Let's see if we could get better results by guessing. Let's compute the averige number of wrong predictions with a probability of 0:
+```{r, echo = FALSE}
+loss_func(class = alc$high_use, prob = 0)
+```
+We get 29% of average wrong classifications. With a probability of 0, everybody will be dumped in the "FALSE" category. Most of the predictions are still correct, because there are so much more of those non-high-users.
+
+Let's compute the averige number of wrong predictions with a probability of 1:
+```{r, echo = FALSE}
+loss_func(class = alc$high_use, prob = 1)
+```
+
+70% of the classifications are wrong, because now everybody's in the "TRUE"-category! Seems like our model indeed predicts the alcholol use better than by guessing (although not hugely so).
+
+Then let's do the cross-validation and calculate the average number of wrong predictions in cross-validation:
+
+```{r, echo = FALSE, warning= FALSE}
+library(boot)
+cv <- cv.glm(data = alc, cost = loss_func, glmfit = model2, K = 10)
+cv$delta[1]
+```
+
+The prediction error seems to stay between 0.24-0.26, so it seems to be pretty much the same as the model in datacamp.
+
+
+
+
+
+
+
