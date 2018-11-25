@@ -1,0 +1,114 @@
+##Clustering and classification
+
+
+Loading the Boston data and exploring its structure and dimensions
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(MASS)
+data("Boston")
+str(Boston)
+```
+
+Boston data includes 506 observations of 14 variables, which measure housing-related charachteristics.
+
+Let's then explore the data graphically and look at summeries of the variables:
+```{r, echo = FALSE,}
+pairs(Boston)
+summary(Boston)
+```
+
+From the scatterplots we can already see that there seem to be correlations between certain variables.There seems to be a correlation between nox (nitrogen oxides concentration) and age (proportion of owner-occupied units built prior to 1940) and nox and dis (weighted mean of distances to five Boston employment centres), rm (average number of rooms per dwelling) and lstat (lower status of the population) and rm and medv (median value of owner-occupied homes in \$1000s). Also age and dis and age and lstat seem to be correlated.
+
+Let's standardize the dataset and print out the new summeries:
+```{r, echo = FALSE}
+boston_scaled <- scale(Boston)
+summary(boston_scaled)
+```
+
+Because we have extracted from each variable its mean, the lowest values for each variable are now negative and highest values are lower than before. Also the ranges have gotten more narrow. When looking at the scaled values we are really looking at the fluctuations around variable means, in number of standard deviations.
+
+
+
+Let's create a categorical variable "crime" by breaking it into it's quantiles. We'll include it into the scaled dataset and  drop the old crime variable off.
+```{r, echo =FALSE}
+boston_scaled <- as.data.frame(boston_scaled)
+bins <- quantile(boston_scaled$crim)
+crime <- cut(boston_scaled$crim, breaks = bins, include.lowest = TRUE, label = c("low", "med_low", "med_high", "high"))
+boston_scaled <- data.frame(boston_scaled, crime)
+boston_scaled <- dplyr::select(boston_scaled, -crim)
+summary(boston_scaled$crime)
+```
+
+
+Then, we'll divide the dataset into training and testing sets. Let's choose randomly 80% of the rows in the boston_scaled dataset. Training dataset will include only those 80% of the rows, and the test set will include the rest of the data.
+```{r, echo = FALSE}
+set.seed(125)
+n <- nrow(boston_scaled)
+ind <- sample(n,  size = n * 0.8)
+train <- boston_scaled[ind,]
+test <- boston_scaled[-ind,]
+````
+
+Finally we get to fit the linear discriminant analysis and print it out
+```{r, echo = FALSE}
+lda.fit <- lda(crime ~., data = train)
+lda.fit
+```
+The output produced inludes bunch of information, like coefficients and group means, but it doesn't really tell us anything about how well the analysis worked (did it predict categories correctly.)
+
+Let's draw a plot of it:
+
+``` {r, echo = FALSE}
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+classes <- as.numeric(train$crime)
+plot(lda.fit, dimen = 2, col = classes, pch = classes)
+lda.arrows(lda.fit, myscale = 1)
+```
+
+Let's save the crimecategories from the testset and then remove crime from the test dataset. Then let's predict the classes with the test data and produce crosstabulation of the results:
+```{r, echo = FALSE}
+correct_classes <- test$crime
+test <- dplyr::select(test, -crime)
+lda.pred <- predict(lda.fit, newdata = test)
+table(correct = correct_classes, predicted = lda.pred$class)
+```
+
+All of those in the highest crime quantile were predicted correctly, so our model separates between high crime areas and other areas really well! Model has a little trouble with predicting the med_high and med_low categories. 18 of 21 of those truly in the med_high category are predicted as so. There's even more problems with the med_low category: only 14 of those 36 are classified correctly. Low_med group isn't any better. Looks like the separation works great if we want separate the high crime areas; for other quintiles, there is a lot of overlapping.
+
+Reloading the Boston-dataset and scaling it. Let's then use eucledian distance to calculate the distances.
+``` {r, echo = FALSE} 
+data('Boston')
+boston_scaled <- scale(Boston)
+dist_eu <- dist(boston_scaled)
+summary(dist_eu)
+```
+
+Let's perform kmeans clustering with 4 centers and draw a plot of the clusters we obtain:
+```{r, echo = FALSE}
+km <-kmeans(boston_scaled, centers = 4)
+pairs(boston_scaled, col = km$cluster)
+```
+
+There seems to be quite a lot of overlapping between the clusters. The problem here is that we don't yet know what is the optimal number of clusters. We should find the solution were the variation within the clusters is as small as possible.
+So let's calculate the total within cluster sum of squares for different number of clusters and visualize the results:
+```{r, echo = FALSE, warning = FALSE}
+library(ggplot2)
+set.seed(123)
+k_max <- 10
+twcss <- sapply(1:k_max, function(k){kmeans(boston_scaled, k)$tot.withinss})
+qplot(x = 1:k_max, y = twcss, geom = 'line')
+```
+
+Here we can see a clear change of direction in the graph around 2. We can see that the total within cluster sum of squares decreases somewhat radically till 2 clusters, but after that, changes in variation are less clear. Let's choose 2 as the number of centers.
+```{r, echo = FALSE}
+km <-kmeans(boston_scaled, centers = 2)
+pairs(boston_scaled, col = km$cluster)
+```
+
+Okay, that is probably a slight improvement to the previous, but I still wouldn't call it perfect.
