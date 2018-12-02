@@ -1,6 +1,7 @@
 #Valentina Kieseppä
 #22.11.2018
-#Week 4, data wrangling.
+#Week 4 & 5, data wrangling.
+#Data source: http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/human1.txt
 
 library(dplyr)
 
@@ -55,5 +56,39 @@ write.csv(human, file = "human.csv")
 TABLE <- read.csv("human.csv", header = TRUE, row.names = 1)
 str(TABLE)
 
+#Week 5, data wrangling continues:
+str(human)
+#Human data includes information on human development and gender equality
+#of different countries.
+
+#Let's mutate the data a bit to change GNI to numeric
+library(stringr)
+human <- mutate(human, GNI = str_replace(human$GNI, pattern=",", replace ="") %>% as.numeric)
+str(human$GNI)
+
+#Excluding some of the variables
+keep <- c("Country", "Education_ratio", "Labour_ratio", "Life", "Expected_education", 
+          "GNI", "Maternal_mortality", "Adolescent_Births", "Parliament_seats")
+human <- select(human, one_of(keep))
+
+
+#Filter out the observations with missing values
+data.frame(human[-1], comp = complete.cases(human))
+human_ <- filter(human, complete.cases(human))
+
+#Let's remove those regions from the data (the last 7 observations)
+last <- nrow(human_) - 7
+human_ <- human_[1:last,]
+
+#Adding countries as row names
+rownames(human_) <- human_$Country
+
+#and finally removing the country variable from the data
+human_ <- select(human_, -Country)
+
+
+#Saving it
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+write.csv(human_, file = "human.csv")
+TABLE <- read.csv("human.csv", header = TRUE, row.names = 1)
 str(TABLE)
-head(TABLE)

@@ -1,0 +1,95 @@
+##Dimensionality reduction techniques
+
+``` {r, echo=FALSE, message =FALSE, warning=FALSE}
+#loading the data and some packages
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+human <- read.csv("human.csv", header = TRUE, row.names = 1)
+
+library(GGally)
+library(dplyr)
+library(corrplot)
+library(tidyr)
+library(FactoMineR)
+library("factoextra")
+````
+
+Let's start by taking a graphical overview of the human data and look at the summeries of the variables
+
+```{r, echo=FALSE}
+ggpairs(human)
+cor(human) %>% corrplot(type="upper")
+summary(human)
+```
+
+The data inlcudes 8 variables, which relate to human development index and gender inequality index. Some variables, like GNI, Maternal mortality and Adolescent birth rate are strongly skewed on the left, meanining that there are much more countries which attain very low values on these variables, and very few with high values. The distribution of the number of female representatives, expected education and education ratio seem somewhat normally distributed with most countries gaining values from the middle, and then there are two variables which are slightly skewed on the right, life expectancy at birth and labour ratio between females and males, where most countries seem to attain high values.
+
+Many of the variables correlate highly with each other. We can see, for example, that education ratio correlates positively with life expectancy, expected education and GNI, and negatively with maternal mortality and adolescent birth rate. Life expectancy correlates negatively with maternal mortality and adolescent birth rate (not exactly surprising), and has strong postitive correlation with GNI and expected education.
+
+
+Then it's time to perform some principal component analysis and draw a biplot of it.
+```{r, echo=FALSE, warning=FALSE, fig.height = 10, fig.width = 10}
+pca_human <- prcomp(human)
+biplot(pca_human, choices = 1:2, cex = c(0.8,1), col = c("grey40", "deeppink2"))
+```
+
+This doesn't look super nice. The problem here is that PCA tries to explain the variance in the data the best it can. Since the range for GNI is far larger than for the other variables, PCA will select to project almost entirely in the direction of GNI.
+
+Let's see then what happens when we standardize the dataset and run the analysis again.
+
+``` {r, echo =FALSE, fig.height = 10, fig.width = 10}
+human_std <- scale(human)
+pca_human <- prcomp(human_std)
+biplot(pca_human, choices = 1:2, cex = c(0.8,1), col = c("grey40", "deeppink2"))
+```
+
+When looking at the arrows we can see that they seem to be going to three directions. Arrows of variables like expected life, expected education and education ratio are horizontal and point straight to left: and we can see, that on the left side of the figure there are countries like Norway and Australia, which surely gain high points on these kind of measures. Arrows of maternal mortality and adolescent birth rate point straight to the other direction, indicating on strong negative correlation with life expectancy and those other variables, which we already new from the correlation plots and can conlcude by common sense. On the very left on the figure, we see some of the poorer countries, like Sierra Leone and Niger.
+
+All of these variable arrows are in line with the x-axis, indicating that these are the variables which by the first principal component separates countries. This makes sense: it does seem like charasteristics related to well-being and not-that-well-being separate between countries well.
+
+The second principal component correlates strongly with gender equality related variabales. Countries which locate up in the figure gain high values on equality measures, and countries which locate down in the figure have lower values on the equality measures. We can see up in the figure Rwanda Iceland, Norway and Finland. Down in the figure we can see countries like Iran and Yemen.
+
+
+Let's move on to the tea data then. Let's look at it sructure, choose a few columns to keep an visualize it.
+``` {r, echo =FALSE, warning=FALSE}
+data("tea")
+str(tea)
+keep_columns <- c("Tea", "How", "how", "sugar", "where", "lunch")
+tea_time <- dplyr::select(tea, one_of(keep_columns))
+gather(tea_time) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+```
+
+Then some multiple correspondence analysis:
+
+``` {r, echo=FALSE}
+mca <- MCA(tea_time, graph = FALSE)
+summary(mca)
+plot(mca, invisible=c("ind"), habillage = "quali")
+```
+
+From the plot here we can see that the first dimension explains about 15% of the variance and the second dimension explains about 14% of the variance. Looks like first dimension seperates between those who shop their tea from the tea shop and drink it unpacked, and those who by it from chain store and drink it from a bag. The second dimension isn't as clear. Up in the figure we can see categories like other, chain store + tea shop and tea bag + unpackaged and down in the figure we can see green, unpackaged and tea shop. Let's take a closer look.
+
+``` {r, echo = FALSE}
+get_mca_ind(mca)
+get_mca_var(mca)
+fviz_mca_biplot(mca, 
+               ggtheme = theme_minimal())
+
+```
+Here we have a biplot of individuals and categories.
+
+Let's then explore the correlation of the individual variable categories with the first two dimensions
+
+``` {r, echo=FALSE}
+fviz_cos2(mca, choice = "var", axes = 1:2)
+````
+
+Looking at this plot it is pretty easy to conlcude that only few of the variable categories are actually correlating with these dimensions, and a position of the rest of the variables in the map should be interpreted cautiously.
+```{R, echo=FALSE}
+# Contributions of rows to dimension 1
+fviz_contrib(mca, choice = "var", axes = 1, top = 15)
+# Contributions of rows to dimension 2
+fviz_contrib(mca, choice = "var", axes = 2, top = 15)
+```
+
+Here we can see how which variable categories contribute seperately to dimensions 1 and 2. The results aren't very impressive and the original plot should be interpreted cautiosly.
+
