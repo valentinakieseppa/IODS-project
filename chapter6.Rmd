@@ -1,0 +1,216 @@
+#Analysis of longitudinal data
+##Part 1
+
+
+``` {r, echo=FALSE, warning = FALSE, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+Loading the RATS data and taking a look at it
+``` {r, echo = FALSE}
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+RATS <- read.table("https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/rats.txt", header = TRUE, sep = '\t')
+RATSL <- read.csv("RATSL.csv", header = TRUE, row.names = 1)
+str(RATSL)
+summary(RATSL)
+```
+
+Okay, for some reason factorizing has failed. Let's do it quickly again.
+
+```{R, echo = FALSE}
+RATSL$ID <- factor(RATSL$ID)
+RATSL$Group <- factor(RATSL$Group)
+str(RATSL)
+```
+
+Looks better! Lets start by a little graphical display. Let's try and plot the weights for all the rats, differentiating between the three groups.
+
+```{r, echo = FALSE}
+ggplot(RATSL, aes(x = Time, y = Weight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(RATSL$Weight), max(RATSL$Weight)))
+```
+  
+First of all, we can see that almost all the rats gain weight during the study. We can also see that those rats with a higher baseline weight will weight more throughout the study. And third, we can see there are clear differences between the three groups. Those in the group 1 have significantly lower weights throughout the study than those in groups 2 and 3.
+
+Let's continue our investigations by standardizing the variable Weight and drawing the plot again with the standardized values.
+
+```{r, echo = FALSE, warning = FALSE}
+RATSL <- RATSL %>%
+  group_by(Group, Time) %>%
+  mutate(stdWeight = scale(Weight)) %>%
+  ungroup()
+ggplot(RATSL, aes(x = Time, y = stdWeight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ Group) +
+  scale_y_continuous(name = "standardized weight")
+```
+
+
+From the standardized plot we can see even more clearly, that those who start off with higher values will attain higher values in all phases of the study. The phenomena is called tracking.
+
+Wouldn't it be more interesting to observe summary measures of the observations rather than indivdually each of them? Let's produce a plot of the group means and look at them.
+
+
+``` {r, echo = FALSE}
+n <- RATSL$Time %>% unique() %>% length()
+RATSS <- RATSL %>%
+  group_by(Group, Time) %>%
+  summarise( mean = mean(Weight), se = sd(Weight)/sqrt(n) ) %>%
+  ungroup()
+ggplot(RATSS, aes(x = Time, y = mean, linetype = Group, shape = Group)) +
+  geom_line() +
+  scale_linetype_manual(values = c(1,2,3)) +
+  geom_point(size=3) +
+  scale_shape_manual(values = c(1,2,3)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se, linetype="1"), width=0.3) +
+  theme(legend.position = c(0.8,0.8)) +
+  scale_y_continuous(name = "mean(weight) +/- se(weight)")
+```
+
+From this plot of the average values we can see that indeed group 1 is clearly separated from the two other groups. Rats in group 1 gain substaintally lower values. Group 2 also attains on average higher values than group 3, although the difference isn't as big.
+
+
+Now it's time to check out wheter we have some outliers messing our game.
+
+```{R, echo = FALSE}
+RATSL10 <- RATSL %>%
+  filter(Time > 1) %>%
+  group_by(Group, ID) %>%
+  summarise( mean=mean(Weight) ) %>%
+  ungroup()
+ggplot(RATSL10, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(Weight)")
+```
+  
+Okay, here we have a boxplot displaying mean values for the three groups. We have a few observations that could be considered as outliers. In group two, there seems to be a variable that gains a mean of almost 600mg. Maybe we should filter that one out?
+
+
+```{R, echo = FALSE}
+RATSL_filter <- RATSL10 %>%
+  filter(mean < 570)
+  ggplot(RATSL_filter, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(Weight)")
+```
+  
+Okay, looks like the removing of the outlier was indeed succesfull!
+
+
+Let's then perform some analysis of variance to make sure to look at the differences between the groups.
+
+```{r, echo = FALSE}
+anova <- aov(mean ~ Group, data = RATSL_filter)
+summary(anova)
+```
+
+Alright, there definetely is some significant difference between these groups! Let's now include the baseline weight into the analysis as a covariate and check out the results again. This is done because the baseline measure is often correlated with the summary measure.
+
+```{r, echo = FALSE}
+RATSL_final <- RATSL10 %>%
+  mutate(baseline = RATS$WD1)
+fit <- lm(mean ~ baseline + Group, data = RATSL_final)
+anova(fit)
+````
+
+While the baseline weight is strongly related to the mean weight, there is no evidence of a group diffence. We can conclude that differences in the baseline weights explain all the differences in variance between the three groups. 
+
+That's it for that, let's move onto the BPRS-data.
+
+##Part 2
+Loading the data and correcting the failed attempts to factorizing
+
+``` {r, echo = FALSE}
+setwd("\\\\helfs01.thl.fi/homes/vkif/_Documents/Uusi kansio/IODS-project/data")
+BPRSL <- read.csv("BPRSL.csv", header = TRUE, row.names = 1)
+BPRS1 <- filter(BPRSL, treatment == 1)
+BPRS2 <- filter(BPRSL, treatment == 2)
+BPRS2$subject <- BPRS2$subject + 20
+BPRSL <- rbind(BPRS1,BPRS2)
+BPRSL$treatment <- factor(BPRSL$treatment)
+BPRSL$subject <- factor(BPRSL$subject)
+str(BPRSL)
+```
+
+Let's start by plotting the data and checking it out
+
+```{r, echo = FALSE}
+ggplot(BPRSL, aes(x = week, y = bprs, linetype = subject)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ treatment, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(BPRSL$bprs), max(BPRSL$bprs)))
+```
+
+Okay, from this plot we can see that for almost all the subjects, bprs scores seem to lower during the study. Second of all we can see that those who start off with a high bprs score are more likely to have higher scores throughout the study. And third, there doesn't seem to be a huge different among the treatments.
+
+Let's just ignore for a while the whole repeated measures design and just fit the data into a regression model.
+
+```{r, echo = FALSE}
+BPRS_reg <- lm(bprs ~ week + treatment, data = BPRSL)
+summary(BPRS_reg)
+```
+
+Changes in time seem to predict significantly scores in bprs, but treatment doesn't. Since this model is inherently flawed, let's not use too long it's interpretation.
+
+Let's then fit one random intercept model! Random intercept model allows the linear regression to differ in intercept for each subject. That way we can take into account the fact that different subjects start off with different baseline scores.
+
+``` {r, echo = FALSE, warning = FALSE, message = FALSE}
+library(lme4)
+BPRS_ref <- lmer(bprs ~ week + treatment + (1 | subject), data = BPRSL, REML = FALSE)
+summary(BPRS_ref)
+```
+
+
+We can see from the random effects that the variance for subject (variance accounted by changes in intercept between different subjects) is 47.41, and the residual (variability that is not accounted by subject, the error term) is 104.21. We can see that the estimates of the fixed effects are very similar than in the simple regression model we fitted before. Standard errors have gotten slightly smaller.
+
+Next we have the random intercept and random slope model! The random intercept and random slope model allows the linear regression to differ not only in intercept, but also in slope for different individuals.
+
+``` {r, echo = FALSE}
+BPRS_ref1 <- lmer(bprs ~ week + treatment + (week | subject), data = BPRSL, REML = FALSE)
+summary(BPRS_ref1)
+```
+
+The residual has gotten smaller. The estimates of the fixed effects have stayed very similar compared to the model we fit before, although the standard errors have changed slightly. Let's calculate the likelihood ratio to compare this model to the previous.
+
+```{r, echo = FALSE}
+anova(BPRS_ref1, BPRS_ref)
+```
+
+
+Chisquare is  7.27 with 2 degrees of freedom and a significant p-value of 0.026. It appears that the random intercept and random slope model indeed fits the data better than the random intercept model.
+
+Let's fit a model with the week*treatment interaction, and perfom the likelihood ratio test for this and the previous model.
+
+``` {r, echo = FALSE}
+BPRS_ref2 <- lmer(bprs ~ week * treatment + (week | subject), data = BPRSL, REML = FALSE)
+summary(BPRS_ref2)
+anova(BPRS_ref2, BPRS_ref1)
+```
+
+Alright, it doesn't look like the interaction term provided us a better model after all.
+
+Let's finish the assignement by plotting the fitted regression lines for each subject.
+
+``` {r, echo = FALSE, warning=FALSE}
+Fitted <- fitted(BPRS_ref2)
+BPRSL <- BPRSL %>%
+  mutate(Fitted)
+ggplot(BPRSL, aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ treatment, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(BPRSL$bprs), max(BPRSL$bprs)))
+````
+
